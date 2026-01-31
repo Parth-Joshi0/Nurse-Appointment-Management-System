@@ -1,8 +1,8 @@
 """
 Google Calendar API service.
 
-Handles creating and updating calendar events for appointments.
-Sends invites to patients when appointments are scheduled or rescheduled.
+Handles creating and updating calendar events for referrals.
+Sends invites to patients when referrals are scheduled or rescheduled.
 
 Setup:
 1. Create Google Cloud project with Calendar API enabled
@@ -28,8 +28,8 @@ load_dotenv()
 class GoogleCalendarService:
     """
     Google Calendar integration service.
-    
-    Creates and manages calendar events for patient appointments.
+
+    Creates and manages calendar events for patient referrals.
     Can send email invites to patients and update events when rescheduled.
     """
     
@@ -83,41 +83,41 @@ class GoogleCalendarService:
         
         return build("calendar", "v3", credentials=credentials)
     
-    async def create_appointment_event(
+    async def create_referral_event(
         self,
-        appointment_id: UUID,
+        referral_id: UUID,
         patient_name: str,
         patient_email: Optional[str],
-        appointment_type: str,
+        specialist_type: str,
         scheduled_at: datetime,
-        duration_minutes: int = 30,
+        duration_minutes: int = 60,
         notes: Optional[str] = None,
         send_invite: bool = True
     ) -> dict:
         """
-        Create a Google Calendar event for an appointment.
-        
+        Create a Google Calendar event for a referral.
+
         Args:
-            appointment_id: Internal appointment ID
+            referral_id: Internal referral ID
             patient_name: Patient's name
             patient_email: Patient's email (for invite)
-            appointment_type: Type of appointment
-            scheduled_at: Appointment datetime
+            specialist_type: Type of specialist (e.g., "CARDIOLOGY")
+            scheduled_at: Referral appointment datetime
             duration_minutes: Duration in minutes
             notes: Optional notes/description
             send_invite: Whether to send email invite to patient
-            
+
         Returns:
             dict with google_event_id and html_link
-            
+
         Raises:
             HttpError: If Calendar API call fails
         """
         end_time = scheduled_at + timedelta(minutes=duration_minutes)
-        
+
         event = {
-            "summary": f"{appointment_type} - {patient_name}",
-            "description": self._build_description(appointment_id, notes),
+            "summary": f"{specialist_type} Appointment - {patient_name}",
+            "description": self._build_description(referral_id, notes),
             "start": {
                 "dateTime": scheduled_at.isoformat(),
                 "timeZone": os.getenv("TIMEZONE", "America/New_York"),
@@ -136,8 +136,8 @@ class GoogleCalendarService:
             # Extended properties to link back to our system
             "extendedProperties": {
                 "private": {
-                    "appointment_id": str(appointment_id),
-                    "source": "nurse_appointment_system"
+                    "referral_id": str(referral_id),
+                    "source": "nurse_referral_system"
                 }
             }
         }
@@ -168,28 +168,28 @@ class GoogleCalendarService:
             # TODO: Implement proper error handling and retry logic
             raise error
     
-    async def update_appointment_event(
+    async def update_referral_event(
         self,
         google_event_id: str,
         scheduled_at: Optional[datetime] = None,
         duration_minutes: Optional[int] = None,
-        appointment_type: Optional[str] = None,
+        specialist_type: Optional[str] = None,
         patient_name: Optional[str] = None,
         notes: Optional[str] = None,
         send_update: bool = True
     ) -> dict:
         """
         Update an existing calendar event (e.g., when rescheduling).
-        
+
         Args:
             google_event_id: The Google Calendar event ID
             scheduled_at: New datetime (if rescheduling)
             duration_minutes: New duration (if changing)
-            appointment_type: Updated type
+            specialist_type: Updated specialist type
             patient_name: Patient name (for summary update)
             notes: Updated notes
             send_update: Whether to notify attendees of change
-            
+
         Returns:
             Updated event details
         """
@@ -199,21 +199,21 @@ class GoogleCalendarService:
                 calendarId=self.calendar_id,
                 eventId=google_event_id
             ).execute()
-            
+
             # Update fields if provided
             if scheduled_at:
-                duration = duration_minutes or 30
+                duration = duration_minutes or 60
                 end_time = scheduled_at + timedelta(minutes=duration)
                 event["start"]["dateTime"] = scheduled_at.isoformat()
                 event["end"]["dateTime"] = end_time.isoformat()
-            
-            if appointment_type and patient_name:
-                event["summary"] = f"{appointment_type} - {patient_name}"
-            
+
+            if specialist_type and patient_name:
+                event["summary"] = f"{specialist_type} Appointment - {patient_name}"
+
             if notes:
-                # Preserve appointment_id in description
-                apt_id = event.get("extendedProperties", {}).get("private", {}).get("appointment_id", "")
-                event["description"] = self._build_description(apt_id, notes)
+                # Preserve referral_id in description
+                ref_id = event.get("extendedProperties", {}).get("private", {}).get("referral_id", "")
+                event["description"] = self._build_description(ref_id, notes)
             
             # Update the event
             send_updates = "all" if send_update else "none"
@@ -279,11 +279,11 @@ class GoogleCalendarService:
                 return None
             raise error
     
-    def _build_description(self, appointment_id, notes: Optional[str] = None) -> str:
-        """Build event description with appointment reference."""
+    def _build_description(self, referral_id, notes: Optional[str] = None) -> str:
+        """Build event description with referral reference."""
         lines = [
-            "Appointment scheduled via Nurse Appointment System",
-            f"Appointment ID: {appointment_id}",
+            "Referral scheduled via Nurse Referral System",
+            f"Referral ID: {referral_id}",
         ]
         if notes:
             lines.append(f"\nNotes: {notes}")

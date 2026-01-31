@@ -2,77 +2,35 @@
 Authentication router.
 
 Handles user authentication for nurse login.
-Uses JWT tokens and bcrypt password hashing.
+Uses Supabase Auth for authentication and JWT token management.
 """
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+from gotrue import User as SupabaseUser
 
-from models.schemas import UserCreate, UserLogin, UserResponse, TokenResponse
+from models.schemas import UserCreate, UserResponse, TokenResponse
 from services.supabase_client import get_supabase_client
 
 router = APIRouter()
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # OAuth2 scheme for token authentication
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
-
-# JWT Configuration
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
-ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash."""
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def get_password_hash(password: str) -> str:
-    """Hash a password."""
-    return pwd_context.hash(password)
-
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """
-    Create a JWT access token.
-
-    Args:
-        data: Data to encode in the token (user_id, email, role)
-        expires_delta: Optional custom expiration time
-
-    Returns:
-        JWT token string
-    """
-    to_encode = data.copy()
-
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
-
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
 
 
 async def get_current_user_from_token(token: str = Depends(oauth2_scheme)) -> dict:
     """
-    Decode JWT token and get current user.
+    Validate Supabase Auth JWT token and get current user.
 
     Args:
         token: JWT token from Authorization header
 
     Returns:
-        User dict from database
+        User dict from Supabase Auth
 
     Raises:
         HTTPException: If token is invalid or user not found
@@ -84,27 +42,42 @@ async def get_current_user_from_token(token: str = Depends(oauth2_scheme)) -> di
     )
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
+        db = get_supabase_client()
+
+        # Get user from Supabase Auth using the token
+        response = db.client.auth.get_user(token)
+
+        if not response or not response.user:
             raise credentials_exception
-    except JWTError:
+
+        supabase_user = response.user
+
+        # Get additional user profile data from users table if it exists
+        user_profile = await db.get_user_by_email(supabase_user.email)
+
+        # Combine Supabase Auth user with profile data
+        user_data = {
+            "id": supabase_user.id,
+            "email": supabase_user.email,
+            "role": user_profile.get("role", "nurse") if user_profile else "nurse",
+            "first_name": user_profile.get("first_name", "") if user_profile else "",
+            "last_name": user_profile.get("last_name", "") if user_profile else "",
+            "is_active": user_profile.get("is_active", True) if user_profile else True,
+            "created_at": supabase_user.created_at,
+            "last_login": user_profile.get("last_login") if user_profile else None
+        }
+
+        if not user_data.get("is_active", True):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is inactive"
+            )
+
+        return user_data
+
+    except Exception as e:
+        print(f"Error validating token: {e}")
         raise credentials_exception
-
-    db = get_supabase_client()
-    from uuid import UUID
-    user = await db.get_user(UUID(user_id))
-
-    if user is None:
-        raise credentials_exception
-
-    if not user.get("is_active", True):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive"
-        )
-
-    return user
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -112,99 +85,143 @@ async def register_user(user: UserCreate):
     """
     Register a new user (nurse/coordinator/admin).
 
-    Hashes password and stores user in database.
+    Creates user in Supabase Auth and stores profile in users table.
     """
     db = get_supabase_client()
 
-    # Check if user already exists
-    existing = await db.get_user_by_email(user.email)
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
+    try:
+        # Create user in Supabase Auth
+        auth_response = db.client.auth.sign_up({
+            "email": user.email,
+            "password": user.password,
+            "options": {
+                "data": {
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "role": user.role.value
+                }
+            }
+        })
 
-    # Hash password
-    password_hash = get_password_hash(user.password)
+        if not auth_response or not auth_response.user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user in authentication system"
+            )
 
-    # Create user record
-    user_data = {
-        "email": user.email,
-        "password_hash": password_hash,
-        "role": user.role.value,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "is_active": True
-    }
+        supabase_user = auth_response.user
 
-    created_user = await db.create_user(user_data)
+        # Create user profile in users table
+        user_data = {
+            "id": supabase_user.id,  # Use the same ID from Supabase Auth
+            "email": user.email,
+            "role": user.role.value,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "is_active": True
+        }
 
-    if not created_user:
+        created_user = await db.create_user(user_data)
+
+        if not created_user:
+            # User created in auth but profile failed - log warning
+            print(f"Warning: User {user.email} created in auth but profile creation failed")
+
+        return {
+            "id": supabase_user.id,
+            "email": supabase_user.email,
+            "role": user.role.value,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "is_active": True,
+            "created_at": supabase_user.created_at
+        }
+
+    except Exception as e:
+        error_message = str(e)
+        if "already registered" in error_message.lower() or "duplicate" in error_message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        print(f"Registration error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create user"
+            detail=f"Failed to register user: {error_message}"
         )
-
-    return created_user
 
 
 @router.post("/login", response_model=TokenResponse)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     """
-    Authenticate user and return JWT token.
+    Authenticate user using Supabase Auth and return JWT token.
 
     Uses OAuth2 password flow (username/password in form data).
     Username field should contain the email address.
     """
     db = get_supabase_client()
 
-    # Get user by email (username field contains email)
-    user = await db.get_user_by_email(form_data.username)
+    try:
+        # Authenticate with Supabase Auth
+        auth_response = db.client.auth.sign_in_with_password({
+            "email": form_data.username,  # username field contains email
+            "password": form_data.password
+        })
 
-    if not user:
+        if not auth_response or not auth_response.session:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        session = auth_response.session
+        supabase_user = auth_response.user
+
+        # Get user profile from users table
+        user_profile = await db.get_user_by_email(supabase_user.email)
+
+        # Check if user is active
+        if user_profile and not user_profile.get("is_active", True):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is inactive"
+            )
+
+        # Update last login if profile exists
+        if user_profile:
+            from uuid import UUID
+            await db.update_user_last_login(UUID(user_profile["id"]))
+
+        # Prepare user data
+        user_data = {
+            "id": supabase_user.id,
+            "email": supabase_user.email,
+            "role": user_profile.get("role", "nurse") if user_profile else "nurse",
+            "first_name": user_profile.get("first_name", "") if user_profile else "",
+            "last_name": user_profile.get("last_name", "") if user_profile else "",
+            "is_active": user_profile.get("is_active", True) if user_profile else True,
+            "created_at": supabase_user.created_at
+        }
+
+        # Return Supabase session token
+        return {
+            "access_token": session.access_token,
+            "token_type": "bearer",
+            "expires_in": session.expires_in,
+            "refresh_token": session.refresh_token,
+            "user": user_data
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Login error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-    # Verify password
-    if not verify_password(form_data.password, user["password_hash"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Check if user is active
-    if not user.get("is_active", True):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive"
-        )
-
-    # Update last login
-    from uuid import UUID
-    await db.update_user_last_login(UUID(user["id"]))
-
-    # Create access token
-    access_token_expires = timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
-    access_token = create_access_token(
-        data={
-            "sub": user["id"],
-            "email": user["email"],
-            "role": user["role"]
-        },
-        expires_delta=access_token_expires
-    )
-
-    # Return token with user info
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "expires_in": ACCESS_TOKEN_EXPIRE_HOURS * 3600,  # in seconds
-        "user": user
-    }
 
 
 @router.get("/me", response_model=UserResponse)

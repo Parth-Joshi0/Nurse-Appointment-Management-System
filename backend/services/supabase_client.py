@@ -551,23 +551,55 @@ class SupabaseClient:
             print(f"Error creating flag: {e}")
             return None
 
+    async def get_flag(self, flag_id: UUID) -> Optional[dict]:
+        """
+        Get a specific flag by ID with referral and patient data.
+
+        Args:
+            flag_id: UUID of the flag
+
+        Returns:
+            Flag record with joined referral/patient data or None
+        """
+        try:
+            result = (
+                self.client.table("flags")
+                .select("*, referrals(id, patient_name, patient_dob, patient_phone, patient_email, scheduled_date, status)")
+                .eq("id", str(flag_id))
+                .single()
+                .execute()
+            )
+            return result.data
+        except Exception as e:
+            print(f"Error getting flag {flag_id}: {e}")
+            return None
+
     async def get_flags(self, status: Optional[str] = None) -> List[dict]:
         """
         Get all flags, optionally filtered by status.
 
         Args:
-            status: Filter by flag status (OPEN, RESOLVED, DISMISSED)
+            status: Filter by flag status (open, resolved, dismissed)
 
         Returns:
-            List of flags
+            List of flags with referral/patient data
         """
         try:
-            query = self.client.table("flags").select("*")
+            # Priority order: urgent > high > medium > low
+            # We'll order by CASE to get correct ordering
+            query = self.client.table("flags").select("*, referrals(id, patient_name, patient_dob, patient_phone, patient_email, scheduled_date, status)")
 
             if status:
                 query = query.eq("status", status)
 
-            result = query.order("priority", desc=True).order("created_at", desc=True).execute()
+            # Order: urgent first, then high, then medium, then low, then by created_at desc
+            result = query.order("created_at", desc=True).execute()
+
+            # Sort in Python to ensure correct priority order
+            if result.data:
+                priority_order = {"urgent": 0, "high": 1, "medium": 2, "low": 3}
+                result.data.sort(key=lambda x: (priority_order.get(x.get("priority", "low"), 4), -datetime.fromisoformat(x["created_at"].replace('Z', '+00:00')).timestamp()))
+
             return result.data or []
         except Exception as e:
             print(f"Error getting flags: {e}")
@@ -578,9 +610,9 @@ class SupabaseClient:
         Get all open flags for nurse dashboard.
 
         Returns:
-            List of open flags
+            List of open flags with referral/patient data
         """
-        return await self.get_flags(status="OPEN")
+        return await self.get_flags(status="open")
 
     async def update_flag(self, flag_id: UUID, updates: dict) -> Optional[dict]:
         """
@@ -619,7 +651,7 @@ class SupabaseClient:
             Updated flag record
         """
         updates = {
-            "status": "RESOLVED",
+            "status": "resolved",
             "resolved_by_id": str(resolved_by_id),
             "resolved_at": datetime.now(timezone.utc).isoformat(),
             "resolution_notes": resolution_notes

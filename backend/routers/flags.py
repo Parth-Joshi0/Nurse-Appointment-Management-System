@@ -24,6 +24,39 @@ from services import get_supabase_client
 router = APIRouter()
 
 
+def transform_flag_response(flag_data: dict) -> dict:
+    """
+    Transform flag data from Supabase to include patient and appointment info.
+
+    Args:
+        flag_data: Raw flag data from database with referrals join
+
+    Returns:
+        Transformed flag data ready for FlagResponse model
+    """
+    # Extract referral data if present
+    referral = flag_data.pop("referrals", None)
+
+    if referral:
+        # Parse patient name into first and last name
+        patient_name = referral.get("patient_name", "")
+        if patient_name:
+            parts = patient_name.strip().split(None, 1)
+            flag_data["patient"] = {
+                "first_name": parts[0] if parts else "",
+                "last_name": parts[1] if len(parts) > 1 else ""
+            }
+
+        # Add appointment info
+        if referral.get("scheduled_date"):
+            flag_data["appointment"] = {
+                "scheduled_date": referral["scheduled_date"],
+                "status": referral.get("status")
+            }
+
+    return flag_data
+
+
 @router.get("/", response_model=List[FlagResponse])
 async def list_flags(
     status: Optional[FlagStatus] = Query(None, description="Filter by status"),
@@ -45,20 +78,33 @@ async def list_flags(
     else:
         flags = await db.get_flags()
 
-    # TODO: Add priority and referral_id filtering in database query
-    return flags
+    # Filter by priority if specified
+    if priority:
+        flags = [f for f in flags if f.get("priority") == priority.value]
+
+    # Filter by referral_id if specified
+    if referral_id:
+        flags = [f for f in flags if f.get("referral_id") == str(referral_id)]
+
+    # Transform flags to include patient/appointment data
+    transformed_flags = [transform_flag_response(dict(flag)) for flag in flags]
+
+    return transformed_flags[offset:offset + limit]
 
 
 @router.get("/open", response_model=List[FlagResponse])
 async def list_open_flags():
     """
     Get all open flags for the nurse dashboard.
-    
+
     This is the primary endpoint for the Flags page,
     showing all items that need nurse attention.
     """
     db = get_supabase_client()
-    return await db.get_open_flags()
+    flags = await db.get_open_flags()
+
+    # Transform flags to include patient/appointment data
+    return [transform_flag_response(dict(flag)) for flag in flags]
 
 
 @router.post("/", response_model=FlagResponse, status_code=status.HTTP_201_CREATED)
@@ -84,7 +130,7 @@ async def create_flag(flag: FlagCreate):
     flag_data["referral_id"] = str(flag.referral_id)
     if flag_data.get("created_by_id"):
         flag_data["created_by_id"] = str(flag_data["created_by_id"])
-    flag_data["status"] = FlagStatus.OPEN.value
+    flag_data["status"] = "open"
     flag_data["priority"] = flag.priority.value
 
     created = await db.create_flag(flag_data)
@@ -102,39 +148,45 @@ async def create_flag(flag: FlagCreate):
 async def get_flag(flag_id: UUID):
     """Get a specific flag by ID."""
     db = get_supabase_client()
-    
-    # TODO: Implement get_flag method in supabase_client
-    flags = await db.get_flags()
-    flag = next((f for f in flags if f["id"] == str(flag_id)), None)
-    
+
+    flag = await db.get_flag(flag_id)
+
     if not flag:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Flag {flag_id} not found"
         )
-    
-    return flag
+
+    return transform_flag_response(dict(flag))
 
 
 @router.patch("/{flag_id}", response_model=FlagResponse)
 async def update_flag(flag_id: UUID, updates: FlagUpdate):
     """
     Update a flag.
-    
+
     For resolving flags, prefer the /resolve endpoint.
     """
     db = get_supabase_client()
-    
+
     update_data = updates.model_dump(exclude_unset=True)
+    # Convert enum values to strings if present
+    if "status" in update_data and update_data["status"]:
+        update_data["status"] = update_data["status"].value if hasattr(update_data["status"], "value") else update_data["status"]
+    if "priority" in update_data and update_data["priority"]:
+        update_data["priority"] = update_data["priority"].value if hasattr(update_data["priority"], "value") else update_data["priority"]
+
     updated = await db.update_flag(flag_id, update_data)
-    
+
     if not updated:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Flag {flag_id} not found"
         )
-    
-    return updated
+
+    # Fetch the updated flag with referral data
+    flag = await db.get_flag(flag_id)
+    return transform_flag_response(dict(flag))
 
 
 @router.post("/{flag_id}/resolve", response_model=FlagResponse)
@@ -145,7 +197,7 @@ async def resolve_flag(
 ):
     """
     Mark a flag as resolved.
-    
+
     Called when nurse has addressed the follow-up item.
     Typically after:
     - Successful manual call to patient
@@ -153,42 +205,46 @@ async def resolve_flag(
     - Issue no longer relevant
     """
     db = get_supabase_client()
-    
+
     # TODO: Get resolved_by from authenticated user
     if not resolved_by:
         resolved_by = UUID("00000000-0000-0000-0000-000000000000")  # Placeholder
-    
+
     resolved = await db.resolve_flag(flag_id, resolved_by, resolution_notes)
-    
+
     if not resolved:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Flag {flag_id} not found"
         )
-    
-    return resolved
+
+    # Fetch the updated flag with referral data
+    flag = await db.get_flag(flag_id)
+    return transform_flag_response(dict(flag))
 
 
 @router.post("/{flag_id}/dismiss", response_model=FlagResponse)
 async def dismiss_flag(flag_id: UUID, reason: Optional[str] = None):
     """
     Dismiss a flag without resolving it.
-    
+
     Used when flag is no longer relevant or was created in error.
     """
     db = get_supabase_client()
-    
+
     updates = {
-        "status": FlagStatus.DISMISSED.value,
+        "status": "dismissed",
         "resolution_notes": reason
     }
-    
+
     updated = await db.update_flag(flag_id, updates)
-    
+
     if not updated:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Flag {flag_id} not found"
         )
-    
-    return updated
+
+    # Fetch the updated flag with referral data
+    flag = await db.get_flag(flag_id)
+    return transform_flag_response(dict(flag))

@@ -1,24 +1,37 @@
 /**
  * Main App component with routing configuration.
  *
- * This is the nurse tablet web app for managing patient appointments.
+ * This is the nurse tablet web app for managing patient referrals.
  * Routes:
  * - / : Dashboard with calendar view
- * - /appointments/:id : Individual appointment details
+ * - /referrals/:id : Individual referral details
  * - /flags : List of follow-up flags
  * - /login : Authentication (optional)
  */
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
-import AppointmentDetail from './pages/AppointmentDetail'
+import ReferralDetail from './pages/ReferralDetail'
 import Flags from './pages/Flags'
 import Login from './pages/Login'
 
 function App() {
-  // TODO: Implement actual auth check
-  const isAuthenticated = true // Placeholder
+  // Check for auth token in localStorage
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    () => !!localStorage.getItem('auth_token')
+  )
+
+  // Listen for storage changes (e.g., login/logout in another tab)
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setIsAuthenticated(!!localStorage.getItem('auth_token'))
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [])
 
   return (
     <BrowserRouter>
@@ -34,7 +47,7 @@ function App() {
           }
         >
           <Route index element={<Dashboard />} />
-          <Route path="appointments/:id" element={<AppointmentDetail />} />
+          <Route path="referrals/:id" element={<ReferralDetail />} />
           <Route path="flags" element={<Flags />} />
         </Route>
 

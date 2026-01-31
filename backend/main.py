@@ -2,7 +2,7 @@
 FastAPI main application entry point.
 
 This backend handles:
-- Patient and appointment management via Supabase
+- Patient and referral management via Supabase
 - ElevenLabs outbound calling integration
 - Google Calendar sync
 - Webhook processing from ElevenLabs
@@ -40,7 +40,7 @@ app.include_router(webhooks.router, prefix="/api/webhooks", tags=["Webhooks"])
 @app.get("/")
 async def root():
     """Health check endpoint."""
-    return {"status": "ok", "message": "Nurse Appointment API is running"}
+    return {"status": "ok", "message": "Nurse Referral API is running"}
 
 
 @app.get("/health")

@@ -98,18 +98,18 @@ class EmailStatus(str, Enum):
 
 class FlagPriority(str, Enum):
     """Priority levels for flags."""
-    LOW = "LOW"
-    MEDIUM = "MEDIUM"
-    HIGH = "HIGH"
-    URGENT = "URGENT"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    URGENT = "urgent"
 
 
 class FlagStatus(str, Enum):
     """Status of a flag."""
-    OPEN = "OPEN"
-    IN_PROGRESS = "IN_PROGRESS"
-    RESOLVED = "RESOLVED"
-    DISMISSED = "DISMISSED"
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    RESOLVED = "resolved"
+    DISMISSED = "dismissed"
 
 
 class AlertType(str, Enum):
@@ -322,6 +322,18 @@ class FlagUpdate(BaseModel):
     resolution_notes: Optional[str] = None
 
 
+class PatientInfo(BaseModel):
+    """Minimal patient info for flag responses."""
+    first_name: str
+    last_name: str
+
+
+class AppointmentInfo(BaseModel):
+    """Minimal appointment info for flag responses."""
+    scheduled_date: Optional[datetime] = None
+    status: Optional[str] = None
+
+
 class FlagResponse(FlagBase):
     """Schema for flag responses."""
     id: UUID
@@ -332,6 +344,8 @@ class FlagResponse(FlagBase):
     resolution_notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    patient: Optional[PatientInfo] = None
+    appointment: Optional[AppointmentInfo] = None
 
     class Config:
         from_attributes = True
