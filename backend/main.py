@@ -11,11 +11,11 @@ This backend handles:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import auth, appointments, calls, flags, calendar, webhooks
+from routers import auth, referrals, calls, flags, calendar, webhooks
 
 app = FastAPI(
-    title="Nurse Appointment Management API",
-    description="Backend for nurse tablet app with appointment scheduling and automated calling",
+    title="Nurse Referral Management API",
+    description="Backend for nurse tablet app with referral scheduling and automated calling",
     version="1.0.0"
 )
 
@@ -30,7 +30,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(appointments.router, prefix="/api/appointments", tags=["Appointments"])
+app.include_router(referrals.router, prefix="/api/referrals", tags=["Referrals"])
 app.include_router(calls.router, prefix="/api/calls", tags=["Calls"])
 app.include_router(flags.router, prefix="/api/flags", tags=["Flags"])
 app.include_router(calendar.router, prefix="/api/calendar", tags=["Calendar"])

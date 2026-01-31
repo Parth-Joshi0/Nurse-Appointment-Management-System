@@ -28,24 +28,24 @@ router = APIRouter()
 async def list_flags(
     status: Optional[FlagStatus] = Query(None, description="Filter by status"),
     priority: Optional[FlagPriority] = Query(None, description="Filter by priority"),
-    patient_id: Optional[UUID] = Query(None, description="Filter by patient"),
+    referral_id: Optional[UUID] = Query(None, description="Filter by referral"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0)
 ):
     """
     List flags with optional filters.
-    
+
     Used by nurse dashboard to show items requiring follow-up.
     Default sorting: priority (desc), then created_at (desc)
     """
     db = get_supabase_client()
-    
+
     if status:
         flags = await db.get_flags(status=status.value)
     else:
         flags = await db.get_flags()
-    
-    # TODO: Add priority and patient_id filtering
+
+    # TODO: Add priority and referral_id filtering in database query
     return flags
 
 
@@ -65,43 +65,36 @@ async def list_open_flags():
 async def create_flag(flag: FlagCreate):
     """
     Create a new flag for nurse follow-up.
-    
+
     Flags can be created:
     - Automatically by webhook handler when call fails
-    - Manually by nurse for any patient concern
+    - Manually by nurse for any referral concern
     """
     db = get_supabase_client()
-    
-    # Verify patient exists
-    patient = await db.get_patient(flag.patient_id)
-    if not patient:
+
+    # Verify referral exists
+    referral = await db.get_referral(flag.referral_id)
+    if not referral:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Patient {flag.patient_id} not found"
+            detail=f"Referral {flag.referral_id} not found"
         )
-    
-    # Verify appointment exists if provided
-    if flag.appointment_id:
-        appointment = await db.get_appointment(flag.appointment_id)
-        if not appointment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Appointment {flag.appointment_id} not found"
-            )
-    
+
     flag_data = flag.model_dump()
-    flag_data["patient_id"] = str(flag.patient_id)
-    flag_data["appointment_id"] = str(flag.appointment_id) if flag.appointment_id else None
+    flag_data["referral_id"] = str(flag.referral_id)
+    if flag_data.get("created_by_id"):
+        flag_data["created_by_id"] = str(flag_data["created_by_id"])
     flag_data["status"] = FlagStatus.OPEN.value
-    
+    flag_data["priority"] = flag.priority.value
+
     created = await db.create_flag(flag_data)
-    
+
     if not created:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create flag"
         )
-    
+
     return created
 
 
