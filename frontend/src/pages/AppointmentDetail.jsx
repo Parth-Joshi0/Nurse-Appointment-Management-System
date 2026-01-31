@@ -23,6 +23,8 @@ import {
   AlertCircle,
   RefreshCw,
   X,
+  Edit,
+  Trash2,
 } from 'lucide-react'
 import {
   getAppointment,
@@ -67,7 +69,6 @@ export default function AppointmentDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries(['appointments', id])
       setShowReschedule(false)
-      // TODO: Show success toast
     },
   })
 
@@ -85,7 +86,6 @@ export default function AppointmentDetail() {
       initiateCall(id, appointment.patient_id || appointment.patient?.id),
     onSuccess: () => {
       queryClient.invalidateQueries(['appointments', id])
-      // TODO: Show success toast
     },
   })
 
@@ -101,23 +101,32 @@ export default function AppointmentDetail() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
+        <div className="text-center">
+          <RefreshCw className="w-10 h-10 animate-spin text-blue-500 mx-auto mb-3" />
+          <p className="text-gray-500">Loading appointment...</p>
+        </div>
       </div>
     )
   }
 
   if (error || !appointment) {
     return (
-      <div className="text-center py-12">
-        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <h2 className="text-xl font-semibold text-gray-900">
+      <div className="text-center py-16">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <AlertCircle className="w-8 h-8 text-red-500" />
+        </div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">
           Appointment not found
         </h2>
+        <p className="text-gray-500 mb-4">
+          The appointment you're looking for doesn't exist.
+        </p>
         <Link
           to="/"
-          className="text-primary-500 hover:underline mt-2 inline-block"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
         >
-          Return to dashboard
+          <ArrowLeft className="w-4 h-4" />
+          Return to Dashboard
         </Link>
       </div>
     )
@@ -134,12 +143,12 @@ export default function AppointmentDetail() {
   const scheduledDate = new Date(scheduled_at)
 
   const statusColors = {
-    scheduled: 'bg-blue-100 text-blue-800',
-    confirmed: 'bg-blue-100 text-blue-800',
-    completed: 'bg-green-100 text-green-800',
-    missed: 'bg-red-100 text-red-800',
-    rescheduled: 'bg-yellow-100 text-yellow-800',
-    cancelled: 'bg-gray-100 text-gray-800',
+    scheduled: 'bg-blue-100 text-blue-700 border-blue-200',
+    confirmed: 'bg-blue-100 text-blue-700 border-blue-200',
+    completed: 'bg-green-100 text-green-700 border-green-200',
+    missed: 'bg-red-100 text-red-700 border-red-200',
+    rescheduled: 'bg-amber-100 text-amber-700 border-amber-200',
+    cancelled: 'bg-gray-100 text-gray-600 border-gray-200',
   }
 
   const handleReschedule = () => {
@@ -155,46 +164,53 @@ export default function AppointmentDetail() {
       {/* Back button */}
       <Link
         to="/"
-        className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
+        className="inline-flex items-center gap-2 text-gray-600 hover:text-blue-600 mb-6 font-medium transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to Dashboard
       </Link>
 
       {/* Main card */}
-      <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         {/* Status header */}
         <div
           className={`
-          px-6 py-4 flex items-center justify-between
-          ${
-            status === 'missed'
-              ? 'bg-red-50'
-              : status === 'completed'
-                ? 'bg-green-50'
-                : 'bg-gray-50'
-          }
-        `}
+            px-6 py-4 flex items-center justify-between border-b
+            ${
+              status === 'missed'
+                ? 'bg-gradient-to-r from-red-50 to-white border-red-100'
+                : status === 'completed'
+                  ? 'bg-gradient-to-r from-green-50 to-white border-green-100'
+                  : 'bg-gradient-to-r from-gray-50 to-white border-gray-100'
+            }
+          `}
         >
           <div className="flex items-center gap-3">
-            {status === 'completed' ? (
-              <CheckCircle className="w-6 h-6 text-green-500" />
-            ) : status === 'missed' ? (
-              <AlertCircle className="w-6 h-6 text-red-500" />
-            ) : (
-              <Clock className="w-6 h-6 text-gray-500" />
-            )}
-            <span
-              className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[status]}`}
+            <div
+              className={`
+              w-10 h-10 rounded-xl flex items-center justify-center
+              ${status === 'completed' ? 'bg-green-100' : status === 'missed' ? 'bg-red-100' : 'bg-blue-100'}
+            `}
             >
-              {status.charAt(0).toUpperCase() + status.slice(1)}
+              {status === 'completed' ? (
+                <CheckCircle className="w-5 h-5 text-green-600" />
+              ) : status === 'missed' ? (
+                <AlertCircle className="w-5 h-5 text-red-600" />
+              ) : (
+                <Clock className="w-5 h-5 text-blue-600" />
+              )}
+            </div>
+            <span
+              className={`px-3 py-1.5 rounded-full text-sm font-semibold border capitalize ${statusColors[status]}`}
+            >
+              {status}
             </span>
           </div>
 
           {/* Calendar sync status */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {syncStatus?.synced ? (
-              <span className="flex items-center gap-1 text-sm text-green-600">
+              <span className="flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-1.5 rounded-xl">
                 <CheckCircle className="w-4 h-4" />
                 Synced to Calendar
               </span>
@@ -202,7 +218,7 @@ export default function AppointmentDetail() {
               <button
                 onClick={() => syncMutation.mutate()}
                 disabled={syncMutation.isPending}
-                className="flex items-center gap-1 text-sm text-primary-500 hover:text-primary-600"
+                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-xl transition-colors"
               >
                 <RefreshCw
                   className={`w-4 h-4 ${syncMutation.isPending ? 'animate-spin' : ''}`}
@@ -217,14 +233,18 @@ export default function AppointmentDetail() {
         <div className="p-6">
           <div className="grid md:grid-cols-2 gap-8">
             {/* Patient info */}
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            <div className="bg-gray-50 rounded-2xl p-5">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <User className="w-5 h-5 text-gray-400" />
                 Patient Information
               </h2>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
-                    <User className="w-8 h-8 text-gray-500" />
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
+                    <span className="text-blue-600 font-bold text-xl">
+                      {patient?.first_name?.[0]}
+                      {patient?.last_name?.[0]}
+                    </span>
                   </div>
                   <div>
                     <p className="text-xl font-semibold text-gray-900">
@@ -235,11 +255,11 @@ export default function AppointmentDetail() {
                 </div>
 
                 {patient?.phone && (
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Phone className="w-5 h-5" />
+                  <div className="flex items-center gap-3 text-gray-600 p-3 bg-white rounded-xl">
+                    <Phone className="w-5 h-5 text-gray-400" />
                     <a
                       href={`tel:${patient.phone}`}
-                      className="hover:text-primary-500"
+                      className="hover:text-blue-600 transition-colors"
                     >
                       {patient.phone}
                     </a>
@@ -247,11 +267,11 @@ export default function AppointmentDetail() {
                 )}
 
                 {patient?.email && (
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Mail className="w-5 h-5" />
+                  <div className="flex items-center gap-3 text-gray-600 p-3 bg-white rounded-xl">
+                    <Mail className="w-5 h-5 text-gray-400" />
                     <a
                       href={`mailto:${patient.email}`}
-                      className="hover:text-primary-500"
+                      className="hover:text-blue-600 transition-colors"
                     >
                       {patient.email}
                     </a>
@@ -261,30 +281,32 @@ export default function AppointmentDetail() {
             </div>
 
             {/* Appointment details */}
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            <div className="bg-gray-50 rounded-2xl p-5">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-gray-400" />
                 Appointment Details
               </h2>
               <div className="space-y-3">
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Calendar className="w-5 h-5" />
+                <div className="flex items-center gap-3 text-gray-700 p-3 bg-white rounded-xl">
+                  <Calendar className="w-5 h-5 text-gray-400" />
                   <span>{format(scheduledDate, 'EEEE, MMMM d, yyyy')}</span>
                 </div>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Clock className="w-5 h-5" />
+                <div className="flex items-center gap-3 text-gray-700 p-3 bg-white rounded-xl">
+                  <Clock className="w-5 h-5 text-gray-400" />
                   <span>
                     {format(scheduledDate, 'h:mm a')} ({duration_minutes} min)
                   </span>
                 </div>
-                <div className="text-gray-600">
-                  <span className="font-medium">Type:</span> {appointment_type}
+                <div className="p-3 bg-white rounded-xl">
+                  <span className="text-gray-500 text-sm">Type</span>
+                  <p className="font-medium text-gray-900 capitalize">
+                    {appointment_type}
+                  </p>
                 </div>
                 {notes && (
-                  <div className="text-gray-600">
-                    <span className="font-medium">Notes:</span>
-                    <p className="mt-1 text-sm bg-gray-50 p-3 rounded">
-                      {notes}
-                    </p>
+                  <div className="p-3 bg-white rounded-xl">
+                    <span className="text-gray-500 text-sm">Notes</span>
+                    <p className="text-gray-700 mt-1">{notes}</p>
                   </div>
                 )}
               </div>
@@ -293,24 +315,25 @@ export default function AppointmentDetail() {
 
           {/* Reschedule form */}
           {showReschedule && (
-            <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-              <h3 className="font-semibold text-gray-900 mb-3">
+            <div className="mt-6 p-5 bg-gradient-to-r from-amber-50 to-white rounded-2xl border border-amber-200">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-amber-500" />
                 Reschedule Appointment
               </h3>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     New Date & Time
                   </label>
                   <input
                     type="datetime-local"
                     value={newDateTime}
                     onChange={(e) => setNewDateTime(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Reason (optional)
                   </label>
                   <input
@@ -318,22 +341,27 @@ export default function AppointmentDetail() {
                     value={rescheduleReason}
                     onChange={(e) => setRescheduleReason(e.target.value)}
                     placeholder="e.g., Patient requested new time"
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all outline-none"
                   />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   <button
                     onClick={handleReschedule}
                     disabled={!newDateTime || rescheduleMutation.isPending}
-                    className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:opacity-50"
+                    className="px-5 py-2.5 bg-amber-500 text-white rounded-xl font-medium hover:bg-amber-600 disabled:opacity-50 transition-colors shadow-sm"
                   >
-                    {rescheduleMutation.isPending
-                      ? 'Saving...'
-                      : 'Confirm Reschedule'}
+                    {rescheduleMutation.isPending ? (
+                      <span className="flex items-center gap-2">
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Saving...
+                      </span>
+                    ) : (
+                      'Confirm Reschedule'
+                    )}
                   </button>
                   <button
                     onClick={() => setShowReschedule(false)}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                    className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
                   >
                     Cancel
                   </button>
@@ -343,12 +371,12 @@ export default function AppointmentDetail() {
           )}
 
           {/* Actions */}
-          <div className="mt-8 pt-6 border-t flex flex-wrap gap-3">
+          <div className="mt-8 pt-6 border-t border-gray-100 flex flex-wrap gap-3">
             {status === 'missed' && (
               <button
                 onClick={() => callMutation.mutate()}
                 disabled={callMutation.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50"
+                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm"
               >
                 <Phone className="w-4 h-4" />
                 {callMutation.isPending ? 'Initiating...' : 'Call Patient'}
@@ -359,9 +387,9 @@ export default function AppointmentDetail() {
               !showReschedule && (
                 <button
                   onClick={() => setShowReschedule(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-xl font-medium hover:bg-amber-600 transition-colors shadow-sm"
                 >
-                  <Calendar className="w-4 h-4" />
+                  <Edit className="w-4 h-4" />
                   Reschedule
                 </button>
               )}
@@ -376,18 +404,15 @@ export default function AppointmentDetail() {
                   }
                 }}
                 disabled={cancelMutation.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:opacity-50"
+                className="flex items-center gap-2 px-5 py-2.5 bg-red-100 text-red-700 rounded-xl font-medium hover:bg-red-200 disabled:opacity-50 transition-colors"
               >
-                <X className="w-4 h-4" />
+                <Trash2 className="w-4 h-4" />
                 Cancel Appointment
               </button>
             )}
           </div>
         </div>
       </div>
-
-      {/* TODO: Call history section */}
-      {/* TODO: Activity timeline */}
     </div>
   )
 }
