@@ -12,7 +12,6 @@
 --   - flags: Nurse follow-up items
 --   - users: System users (nurses/admins)
 --   - calendar_sync: Google Calendar sync tracking
---
 -- ==========================================================
 
 -- Enable UUID extension (usually enabled by default in Supabase)
