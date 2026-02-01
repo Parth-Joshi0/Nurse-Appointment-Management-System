@@ -24,7 +24,7 @@ load_dotenv()
 # CONFIGURATION - PUT YOUR CREDENTIALS HERE
 # ============================================================================
 
-###PASTE API KEYS HERE
+
 
 # ============================================================================
 # APP SETUP
@@ -53,6 +53,44 @@ def home():
     return {"status": "ready", "agent": ELEVENLABS_AGENT_ID}
 
 
+def get_scheduled_dates(specialist_type):
+    """
+    Get all scheduled dates for a patient by name.
+
+    Args:
+        patient_name: The name of the patient to search for
+
+    Returns:
+        dict: Response data with list of scheduled dates or error message
+    """
+    try:
+        # Query all referrals matching patient_name and select scheduled_date
+        response = supabase.table("referrals").select(
+            "id, scheduled_date, status"
+        ).eq("specialist_type", specialist_type.upper()).execute()
+
+        if response.data and len(response.data) > 0:
+            # Extract just the scheduled_date values (filter out None values)
+            scheduled_dates = [
+                record["scheduled_date"]
+                for record in response.data
+                if record["scheduled_date"] is not None
+            ]
+
+            print(f"Found {len(response.data)} record(s) for {specialist_type}")
+            print(f"Scheduled dates: {specialist_type}")
+
+            return scheduled_dates
+
+        else:
+            print(f"No records found for specialist type: {specialist_type}")
+            return False
+
+    except Exception as e:
+        print(f"Error retrieving scheduled dates: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/make-call")
 def make_call(req: CallRequest):
     """Make a call"""
@@ -63,6 +101,10 @@ def make_call(req: CallRequest):
             url=f"{WEBHOOK_BASE_URL}/incoming-call",
             method='POST',
         )
+
+        times = get_scheduled_dates(req.dynamic_variables['specialist_type'])
+
+        req.dynamic_variables['unavailable_times'] = json.dumps(times)
 
         CALL_CONTEXT[call.sid] = req.dynamic_variables
 
@@ -85,14 +127,13 @@ def incoming_call():
     return Response(content=str(response), media_type="application/xml")
 
 
-
-def update_referral_date(patient_name, new_referral_date):
+def update_scheduled_date(patient_name, new_scheduled_date):
     """
-    Update the referral date for a patient by name.
+    Update the scheduled date for a patient by name.
 
     Args:
         patient_name: The name of the patient to update
-        new_referral_date: The new referral date in format 'YYYY-MM-DD'
+        new_scheduled_date: The new scheduled date in format 'YYYY-MM-DD'
 
     Returns:
         dict: Response data with updated record(s) or error message
@@ -100,11 +141,11 @@ def update_referral_date(patient_name, new_referral_date):
     try:
         # Update the referral_date for matching patient_name
         response = supabase.table("referrals").update({
-            "referral_date": new_referral_date
+            "scheduled_date": new_scheduled_date
         }).eq("patient_name", patient_name).execute()
 
         if response.data and len(response.data) > 0:
-            print(f"Successfully updated referral date for {patient_name} to {new_referral_date}")
+            print(f"Successfully updated scheduled date for {patient_name} to {new_scheduled_date}")
             print(f"Updated {len(response.data)} record(s)")
             return {"success": True, "data": response.data}
         else:
@@ -112,7 +153,7 @@ def update_referral_date(patient_name, new_referral_date):
             return {"success": False, "message": "No matching records found"}
 
     except Exception as e:
-        print(f"Error updating referral date: {e}")
+        print(f"Error updating scheduled date: {e}")
         return {"success": False, "error": str(e)}
 
 
@@ -124,6 +165,7 @@ async def media_stream(websocket: WebSocket):
     await websocket.accept()
     print("✅ Twilio connected")
     hangup_after_audio = asyncio.Event()
+    suppress_agent_audio = False
     last_audio_time = 0.0
 
     # Connect to ElevenLabs agent
@@ -138,6 +180,7 @@ async def media_stream(websocket: WebSocket):
             stream_sid = None
             call_sid = None
             stream_ready = asyncio.Event()
+
             # Create tasks for bidirectional communication
             async def twilio_to_elevenlabs():
                 """Forward audio from Twilio to ElevenLabs"""
@@ -170,6 +213,7 @@ async def media_stream(websocket: WebSocket):
                     print("Twilio disconnected")
 
             async def elevenlabs_to_twilio():
+                nonlocal last_audio_time, suppress_agent_audio
                 await stream_ready.wait()
 
                 try:
@@ -190,8 +234,11 @@ async def media_stream(websocket: WebSocket):
                                   meta.get("agent_output_audio_format"))
 
                         elif t == "audio":
-                            nonlocal last_audio_time
                             last_audio_time = time.time()
+
+                            if suppress_agent_audio:
+                                # Don't forward any more agent audio to Twilio
+                                continue
 
                             audio_b64 = data["audio_event"]["audio_base_64"]
                             await websocket.send_text(json.dumps({
@@ -199,7 +246,6 @@ async def media_stream(websocket: WebSocket):
                                 "streamSid": stream_sid,
                                 "media": {"payload": audio_b64}
                             }))
-
 
                         elif t == "ping":
                             # MUST respond with pong
@@ -219,25 +265,51 @@ async def media_stream(websocket: WebSocket):
                             text = data["agent_response_event"]["agent_response"]
                             print("🤖 raw:", text)
 
-                            try:
-                                payload = json.loads(text)
+                            # Check if the response contains "Rescheduled"
+                            if "Rescheduled" in text:
+                                print("🚫 'Rescheduled' detected - will suppress audio in 7 seconds")
 
-                                # This means the agent returned the final result
-                                if "Rescheduled" in payload and call_sid:
-                                    CALL_CONTEXT.setdefault(call_sid, {})
-                                    CALL_CONTEXT[call_sid]["agent_result"] = payload
+                                # Extract data using regex
+                                payload = {"Rescheduled": True}
 
-                                    print("Agent returned:", payload)
+                                # Extract name - look for patterns like "name":"Parth Joshi"
+                                name_match = re.search(r'"name"\s*:\s*"([^"]+)"', text)
+                                if name_match:
+                                    payload["name"] = name_match.group(1)
 
+                                # Extract scheduled_date - look for patterns like "scheduled_date":"2026-02-07 11:00:00+00:00"
+                                date_match = re.search(r'"scheduled_date"\s*:\s*"([^"]+)"', text)
+                                if date_match:
+                                    payload["scheduled_date"] = date_match.group(1)
+
+                                # Save to CALL_CONTEXT
+                                CALL_CONTEXT.setdefault(call_sid, {})
+                                CALL_CONTEXT[call_sid]["agent_result"] = payload
+
+                                # Update database if we have the necessary data
+                                if payload.get("name") and payload.get("scheduled_date"):
+                                    update_scheduled_date(payload["name"], payload["scheduled_date"])
+                                    print("✅ Saved data:", payload)
+                                else:
+                                    print("⚠️ Incomplete data extracted:", payload)
+
+                                # Schedule suppression after 7 seconds
+                                async def delayed_suppress():
+                                    await asyncio.sleep(5.5)
+                                    suppress_agent_audio = True
+
+                                    # Clear buffer
+                                    if stream_sid:
+                                        await websocket.send_text(json.dumps({
+                                            "event": "clear",
+                                            "streamSid": stream_sid
+                                        }))
+
+                                    print("🚫 Audio suppressed after 7 seconds")
+                                    # Trigger instant hangup
                                     hangup_after_audio.set()
 
-                                if payload.get('Rescheduled') and payload.get('referral_date'):
-                                    date_formatted = payload['referral_date'].replace('/', '-')
-                                    update_referral_date(payload['name'], date_formatted)
-
-                            except json.JSONDecodeError:
-                                # Normal spoken text — ignore
-                                pass
+                                asyncio.create_task(delayed_suppress())
 
                 except websockets.exceptions.ConnectionClosed:
                     print("ElevenLabs disconnected")
@@ -258,16 +330,10 @@ async def media_stream(websocket: WebSocket):
                 await stream_ready.wait()
                 await hangup_after_audio.wait()
 
-                # Wait until ElevenLabs stops sending audio for a moment
-                while True:
-                    await asyncio.sleep(0.25)
-                    if time.time() - last_audio_time > 1.0:
-                        break
-
-                await asyncio.sleep(11)
+                # Hangup instantly (no delay)
                 await end_elevenlabs()
 
-                # End the Twilio call
+                # End the Twilio call immediately
                 if call_sid:
                     try:
                         twilio_client.calls(call_sid).update(status="completed")
