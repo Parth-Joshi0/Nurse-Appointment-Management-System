@@ -27,25 +27,25 @@ export default function Dashboard() {
 
   // Fetch today's referrals
   const todayStr = format(new Date(), 'yyyy-MM-dd')
-  const { data: todayReferrals = [], isLoading: loadingToday } = useQuery({
+  const { data: todayReferrals = [], isLoading: loadingToday, isFetching: fetchingToday } = useQuery({
     queryKey: ['referrals', 'date', todayStr],
     queryFn: () => getReferralsByDate(todayStr),
   })
 
   // Fetch missed referrals
-  const { data: missedReferrals = [], isLoading: loadingMissed } = useQuery({
+  const { data: missedReferrals = [], isLoading: loadingMissed, isFetching: fetchingMissed } = useQuery({
     queryKey: ['referrals', 'status', 'MISSED'],
     queryFn: () => getReferralsByStatus('MISSED'),
   })
 
   // Fetch scheduled (upcoming) referrals
-  const { data: upcomingReferrals = [] } = useQuery({
+  const { data: upcomingReferrals = [], isFetching: fetchingUpcoming } = useQuery({
     queryKey: ['referrals', 'status', 'SCHEDULED'],
     queryFn: () => getReferralsByStatus('SCHEDULED'),
   })
 
   // Fetch flags
-  const { data: flags = [] } = useQuery({
+  const { data: flags = [], isFetching: fetchingFlags } = useQuery({
     queryKey: ['flags', 'open'],
     queryFn: getOpenFlags,
   })
@@ -104,6 +104,7 @@ export default function Dashboard() {
   }), [upcomingReferrals, missedReferrals, flaggedPatients])
 
   const isLoading = loadingToday || loadingMissed
+  const isFetching = fetchingToday || fetchingMissed || fetchingUpcoming || fetchingFlags
 
   return (
     <div>
@@ -116,7 +117,7 @@ export default function Dashboard() {
           onClick={() => queryClient.invalidateQueries()}
           className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
         >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
           Refresh
         </button>
       </div>

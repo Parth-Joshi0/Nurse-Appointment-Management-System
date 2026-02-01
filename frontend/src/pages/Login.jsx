@@ -8,7 +8,7 @@
  * - Demo credentials display
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Heart, LogIn } from 'lucide-react'
 import { login } from '../api/client'
@@ -19,6 +19,14 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Clear any existing auth data when login page loads
+  useEffect(() => {
+    localStorage.removeItem('isAuthenticated')
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('nurseName')
+    localStorage.removeItem('user_id')
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()

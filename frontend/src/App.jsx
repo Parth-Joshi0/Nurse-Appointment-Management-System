@@ -33,8 +33,13 @@ function App() {
           <Route path="flags" element={<Flags />} />
         </Route>
 
-        {/* Catch all */}
-        <Route path="*" element={<Navigate to="/calendar" replace />} />
+        {/* Catch all - redirect to login if not authenticated, otherwise to calendar */}
+        <Route
+          path="*"
+          element={
+            isAuthenticated() ? <Navigate to="/calendar" replace /> : <Navigate to="/login" replace />
+          }
+        />
       </Routes>
     </BrowserRouter>
   )

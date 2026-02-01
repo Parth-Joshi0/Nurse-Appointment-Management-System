@@ -46,9 +46,11 @@ export default function Layout() {
 
   const handleLogout = () => {
     if (window.confirm('Are you sure you want to log out?')) {
+      // Clear all auth-related data
       localStorage.removeItem('isAuthenticated')
       localStorage.removeItem('auth_token')
       localStorage.removeItem('nurseName')
+      localStorage.removeItem('user_id')
       navigate('/login')
     }
   }

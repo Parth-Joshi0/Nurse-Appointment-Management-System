@@ -48,6 +48,7 @@ export default function ReferralDetail() {
   const {
     data: referral,
     isLoading,
+    isFetching,
     error,
   } = useQuery({
     queryKey: ['referrals', id],
@@ -163,14 +164,23 @@ export default function ReferralDetail() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      {/* Back button */}
-      <Link
-        to="/"
-        className="inline-flex items-center gap-2 text-gray-600 hover:text-blue-600 mb-6 font-medium transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to Dashboard
-      </Link>
+      {/* Header with back button and refresh */}
+      <div className="flex items-center justify-between mb-6">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-2 text-gray-600 hover:text-blue-600 font-medium transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Dashboard
+        </Link>
+        <button
+          onClick={() => queryClient.invalidateQueries(['referrals', id])}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
 
       {/* Main card */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">

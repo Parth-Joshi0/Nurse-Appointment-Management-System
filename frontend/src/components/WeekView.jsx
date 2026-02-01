@@ -25,6 +25,18 @@ export default function WeekView({
     })
   }
 
+  const getAppointmentColor = (type) => {
+    const colors = {
+      'consultation': 'bg-blue-100 text-blue-800 border-blue-200',
+      'follow-up': 'bg-green-100 text-green-800 border-green-200',
+      'check-up': 'bg-purple-100 text-purple-800 border-purple-200',
+      'vaccination': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      'treatment': 'bg-pink-100 text-pink-800 border-pink-200',
+      'emergency': 'bg-red-100 text-red-800 border-red-200',
+    }
+    return colors[type?.toLowerCase()] || 'bg-gray-100 text-gray-800 border-gray-200'
+  }
+
   const handlePrevWeek = () => {
     onDateSelect(addDays(weekStart, -7))
   }
@@ -74,14 +86,14 @@ export default function WeekView({
                   return (
                     <li
                       key={apt.id}
-                      className="text-xs bg-blue-200 rounded px-2 py-1 truncate cursor-pointer hover:bg-blue-300 flex items-center gap-2"
+                      className={`text-xs px-2 py-1 rounded truncate cursor-pointer border ${getAppointmentColor(apt.specialist_type)} hover:opacity-80 transition-opacity`}
                       onClick={e => {
                         e.stopPropagation();
                         onEditAppointment && onEditAppointment(apt)
                       }}
                     >
-                      <span className="font-mono font-semibold text-gray-700 min-w-[38px]">{time}</span>
-                      <span>{apt.patient_name || 'Appointment'}</span>
+                      <div className="font-semibold">{time}</div>
+                      <div className="truncate">{apt.patient_name || 'Appointment'}</div>
                     </li>
                   )
                 })}

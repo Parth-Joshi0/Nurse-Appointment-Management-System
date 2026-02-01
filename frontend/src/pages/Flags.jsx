@@ -32,6 +32,7 @@ export default function Flags() {
   const {
     data: flags = [],
     isLoading,
+    isFetching,
     refetch,
   } = useQuery({
     queryKey: ['flags', filter],
@@ -104,7 +105,7 @@ export default function Flags() {
           onClick={() => refetch()}
           className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all text-gray-700 font-medium shadow-sm"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
           Refresh
         </button>
       </div>

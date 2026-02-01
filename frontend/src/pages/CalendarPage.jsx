@@ -11,6 +11,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays } from 'date-fns'
+import { RefreshCw } from 'lucide-react'
 import MonthCalendar from '../components/MonthCalendar'
 import DayView from '../components/DayView'
 import WeekView from '../components/WeekView'
@@ -48,7 +49,7 @@ export default function CalendarPage() {
   const { start, end } = getDateRange()
   
   // Fetch all referrals for the date range with parallel requests
-  const { data: appointments = [], isLoading } = useQuery({
+  const { data: appointments = [], isLoading, isFetching } = useQuery({
     queryKey: ['referrals', 'range', format(start, 'yyyy-MM-dd'), format(end, 'yyyy-MM-dd')],
     queryFn: async () => {
       const dates = []
@@ -57,22 +58,25 @@ export default function CalendarPage() {
         dates.push(format(currentDate, 'yyyy-MM-dd'))
         currentDate = addDays(currentDate, 1)
       }
-      
+
       // Fetch all dates in parallel instead of sequentially
       const results = await Promise.allSettled(
         dates.map(date => getReferralsByDate(date))
       )
-      
+
       const allReferrals = []
       results.forEach(result => {
         if (result.status === 'fulfilled') {
           allReferrals.push(...(result.value || []))
         }
       })
-      
+
       return allReferrals
     },
-    staleTime: 60000, // Increase stale time from 30s to 60s
+    staleTime: 5 * 60 * 1000, // 5 minutes - keep data fresh longer
+    cacheTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    refetchOnMount: false, // Use cached data on mount if available
   })
 
   // Create referral mutation
@@ -221,9 +225,18 @@ export default function CalendarPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Referral Appointments</h1>
-        <p className="text-gray-600 mt-2">Manage and track all patient referral appointments</p>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Referral Appointments</h1>
+          <p className="text-gray-600 mt-2">Manage and track all patient referral appointments</p>
+        </div>
+        <button
+          onClick={() => queryClient.invalidateQueries(['referrals'])}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
       </div>
 
       {isLoading ? (
