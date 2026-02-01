@@ -1,20 +1,8 @@
-/**
- * Main App component with routing configuration.
- *
- * This is the nurse tablet web app for managing patient appointments.
- * Routes:
- * - /login : Authentication
- * - /calendar : Calendar view with appointments
- * - /dashboard : Follow-up dashboard
- * - /flags : List of follow-up flags
- * - /appointments/:id : Individual appointment details
- */
-
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import CalendarPage from './pages/CalendarPage'
 import DashboardNew from './pages/DashboardNew'
-import AppointmentDetail from './pages/AppointmentDetail'
+import ReferralDetail from './pages/ReferralDetail'
 import Flags from './pages/Flags'
 import Login from './pages/Login'
 
@@ -41,7 +29,7 @@ function App() {
           <Route index element={<Navigate to="/calendar" replace />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="dashboard" element={<DashboardNew />} />
-          <Route path="appointments/:id" element={<AppointmentDetail />} />
+          <Route path="referrals/:id" element={<ReferralDetail />} />
           <Route path="flags" element={<Flags />} />
         </Route>
 

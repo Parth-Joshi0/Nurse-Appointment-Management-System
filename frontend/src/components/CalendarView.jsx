@@ -1,12 +1,12 @@
 /**
  * Calendar view component using react-big-calendar.
  *
- * Displays appointments in week/day/month views.
- * Color-coded by appointment status:
+ * Displays referrals in week/day/month views.
+ * Color-coded by referral status:
  * - Blue: Scheduled
- * - Green: Completed
+ * - Green: Completed/Attended
  * - Red: Missed
- * - Yellow: Rescheduled
+ * - Purple: Escalated
  */
 
 import { useMemo, useState, useCallback } from 'react'
@@ -27,57 +27,64 @@ const localizer = dateFnsLocalizer({
   locales,
 })
 
-// Status to color mapping
+// Status to color mapping (uppercase to match schema)
 const statusColors = {
-  scheduled: { bg: '#3b82f6', text: 'Scheduled' },
-  confirmed: { bg: '#3b82f6', text: 'Confirmed' },
-  completed: { bg: '#22c55e', text: 'Completed' },
-  missed: { bg: '#ef4444', text: 'Missed' },
-  rescheduled: { bg: '#f59e0b', text: 'Rescheduled' },
-  cancelled: { bg: '#9ca3af', text: 'Cancelled' },
+  PENDING: { bg: '#9ca3af', text: 'Pending' },
+  SCHEDULED: { bg: '#3b82f6', text: 'Scheduled' },
+  ATTENDED: { bg: '#22c55e', text: 'Attended' },
+  COMPLETED: { bg: '#22c55e', text: 'Completed' },
+  MISSED: { bg: '#ef4444', text: 'Missed' },
+  NEEDS_REBOOK: { bg: '#f59e0b', text: 'Needs Rebook' },
+  ESCALATED: { bg: '#a855f7', text: 'Escalated' },
+  CANCELLED: { bg: '#9ca3af', text: 'Cancelled' },
 }
 
 /**
  * CalendarView component
  * @param {Object} props
- * @param {Array} props.appointments - Array of appointment objects
+ * @param {Array} props.referrals - Array of referral objects
  * @param {Function} props.onSelectDate - Callback when date is selected
- * @param {Function} props.onSelectAppointment - Callback when appointment is clicked
+ * @param {Function} props.onSelectReferral - Callback when referral is clicked
  */
 export default function CalendarView({
-  appointments = [],
+  referrals = [],
   onSelectDate,
-  onSelectAppointment,
+  onSelectReferral,
 }) {
   const navigate = useNavigate()
   const [view, setView] = useState('week')
   const [date, setDate] = useState(new Date())
 
-  // Transform appointments to calendar events
+  // Transform referrals to calendar events
   const events = useMemo(() => {
-    return appointments.map((apt) => ({
-      id: apt.id,
-      title: `${apt.appointment_type} - ${apt.patient?.first_name || 'Patient'} ${apt.patient?.last_name || ''}`,
-      start: new Date(apt.scheduled_at),
-      end: new Date(
-        new Date(apt.scheduled_at).getTime() +
-          (apt.duration_minutes || 30) * 60000,
-      ),
-      status: apt.status,
-      type: apt.appointment_type,
-      resource: apt,
-    }))
-  }, [appointments])
+    return referrals
+      .filter((ref) => ref.scheduled_date) // Only show scheduled referrals
+      .map((ref) => {
+        const startDate = new Date(ref.scheduled_date)
+        // Default 60 min duration for referrals
+        const endDate = new Date(startDate.getTime() + 60 * 60000)
+
+        return {
+          id: ref.id,
+          title: `${ref.specialist_type} - ${ref.patient_name || 'Patient'}`,
+          start: startDate,
+          end: endDate,
+          status: ref.status,
+          type: ref.specialist_type,
+          resource: ref,
+        }
+      })
+  }, [referrals])
 
   // Custom event styling
   const eventStyleGetter = useCallback((event) => {
     const backgroundColor =
-      statusColors[event.status]?.bg || statusColors.scheduled.bg
+      statusColors[event.status]?.bg || statusColors.SCHEDULED.bg
     return {
       style: {
         backgroundColor,
         borderRadius: '8px',
-        opacity: event.status === 'cancelled' ? 0.5 : 1,
+        opacity: event.status === 'CANCELLED' ? 0.5 : 1,
         color: 'white',
         border: 'none',
         display: 'block',
@@ -91,13 +98,13 @@ export default function CalendarView({
   // Handle event click
   const handleSelectEvent = useCallback(
     (event) => {
-      if (onSelectAppointment) {
-        onSelectAppointment(event.resource)
+      if (onSelectReferral) {
+        onSelectReferral(event.resource)
       } else {
-        navigate(`/appointments/${event.id}`)
+        navigate(`/referrals/${event.id}`)
       }
     },
-    [navigate, onSelectAppointment],
+    [navigate, onSelectReferral],
   )
 
   // Handle slot selection (clicking on empty time)
@@ -158,10 +165,10 @@ export default function CalendarView({
           ))}
         </div>
 
-        {/* Add appointment button */}
+        {/* Add referral button */}
         <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors shadow-sm">
           <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Add Appointment</span>
+          <span className="hidden sm:inline">Add Referral</span>
         </button>
       </div>
     </div>
