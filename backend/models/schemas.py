@@ -186,11 +186,9 @@ class ReferralResponse(ReferralBase):
     status: ReferralStatus
     completed_date: Optional[datetime] = None
 
-    # Email & Calendar tracking
+    # Email tracking
     email_sent: bool = False
     email_sent_at: Optional[datetime] = None
-    calendar_invite_sent: bool = False
-    calendar_event_id: Optional[str] = None
 
     # Audit fields
     created_by_id: UUID
