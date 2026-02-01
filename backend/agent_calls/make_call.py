@@ -40,7 +40,7 @@ app.add_middleware(
 
 )
 twilio_client = TwilioClient(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN"))
-
+supabase = SupaBaseClient(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
 CALL_CONTEXT: dict[str, dict] = {}
 
 class CallRequest(BaseModel):

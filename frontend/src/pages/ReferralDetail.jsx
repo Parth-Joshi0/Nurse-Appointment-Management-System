@@ -82,7 +82,7 @@ export default function ReferralDetail() {
 
   // Call mutation
   const callMutation = useMutation({
-    mutationFn: () => initiateCall(id, referral.patient_phone),
+    mutationFn: () => initiateCall(referral),
     onSuccess: () => {
       queryClient.invalidateQueries(['referrals', id])
     },

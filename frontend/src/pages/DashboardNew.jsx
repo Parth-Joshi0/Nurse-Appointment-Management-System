@@ -57,8 +57,7 @@ export default function Dashboard() {
 
   // Initiate call mutation
   const callMutation = useMutation({
-    mutationFn: ({ referralId, phoneNumber }) =>
-      initiateCall(referralId, phoneNumber),
+    mutationFn: (referral) => initiateCall(referral),
     onSuccess: () => {
       queryClient.invalidateQueries(['referrals'])
     },
@@ -73,10 +72,7 @@ export default function Dashboard() {
   })
 
   const handleActivateAgentCall = (referral) => {
-    callMutation.mutate({
-      referralId: referral.id,
-      phoneNumber: referral.patient_phone,
-    })
+    callMutation.mutate(referral)
   }
 
   const handleCallPatient = (referral) => {

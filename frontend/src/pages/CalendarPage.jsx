@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays } from 'date-fns'
 import MonthCalendar from '../components/MonthCalendar'
 import DayView from '../components/DayView'
+import WeekView from '../components/WeekView'
 import AppointmentModal from '../components/AppointmentModal'
 import AppointmentSidePanel from '../components/AppointmentSidePanel'
 import {
@@ -128,7 +129,7 @@ export default function CalendarPage() {
   const callMutation = useMutation({
     mutationFn: (referralId) => {
       const referral = appointments.find(a => a.id === referralId)
-      return initiateCall(referralId, referral?.patient_phone)
+      return initiateCall(referral)
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['referrals'])
@@ -183,9 +184,8 @@ export default function CalendarPage() {
           />
         )
       case 'week':
-        // Week view falls back to day view for now
         return (
-          <DayView
+          <WeekView
             appointments={appointments}
             selectedDate={selectedDate}
             onDateSelect={setSelectedDate}

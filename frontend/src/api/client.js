@@ -236,16 +236,20 @@ export const dismissFlag = async (id, reason = null) => {
  */
 const TWILIO_VERIFIED_NUMBER = "+19054628586"; // trial-verified number
 
+
+/**
+ * Initiate an outbound call for a missed referral using patient info.
+ * @param {Object} patient - Patient/referral object with required info
+ * @param {string} callType - Type of call (default: MISSED_APPOINTMENT_FOLLOWUP)
+ */
 export const initiateCall = async (
-  referralId,
-  _phoneNumber, // intentionally unused on trial
+  patient,
   callType = "MISSED_APPOINTMENT_FOLLOWUP"
 ) => {
   // Log when function is called
   console.log("🔵 initiateCall() called");
   console.log("📊 Parameters:", {
-    referralId,
-    _phoneNumber,
+    patient,
     callType,
     timestamp: new Date().toISOString()
   });
@@ -254,20 +258,22 @@ export const initiateCall = async (
     console.log("📡 Making fetch request to make-call endpoint...");
 
     const response = await fetch(
-      "https://vehicles-forgot-terrain-magnificent.trycloudflare.com/make-call",
+      "https://north-kingston-contributions-deputy.trycloudflare.com/make-call",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone_number: TWILIO_VERIFIED_NUMBER, // 👈 forced
           dynamic_variables: {
-            patient_name: "Parth Joshi",
-            patient_age: "19",
-            specialist_type: "Cardiologist",
-            cancelled_appointment_time: "Jan 20, 2026",
-            selected_time: "",
-            referral_id: referralId,
+            patient_name: patient.patient_name || "Unknown",
+            patient_age: patient.patient_age || patient.patient_dob || "",
+            specialist_type: patient.specialist_type || "",
+            cancelled_appointment_time: patient.scheduled_date ? new Date(patient.scheduled_date).toLocaleString() : "",
+            selected_time: patient.selected_time || "",
+            referral_id: patient.id || patient.referral_id || "",
             call_type: callType,
+            patient_phone: patient.patient_phone || "",
+            patient_email: patient.patient_email || "",
           },
         }),
       }
