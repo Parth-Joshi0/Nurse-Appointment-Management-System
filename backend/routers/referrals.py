@@ -298,8 +298,7 @@ async def reschedule_referral(referral_id: UUID, reschedule: ReferralReschedule)
 
     This endpoint:
     1. Updates the referral scheduled_date in Supabase
-    2. Updates the Google Calendar event (if exists)
-    3. Sends updated invite to patient
+    2. Sends updated invite to patient
 
     Called by:
     - Nurse manually rescheduling
@@ -424,7 +423,7 @@ async def cancel_referral(referral_id: UUID):
     """
     Cancel a referral.
 
-    Updates status to cancelled and removes Google Calendar event.
+    Updates status to cancelled.
     """
     db = get_supabase_client()
 

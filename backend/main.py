@@ -4,14 +4,13 @@ FastAPI main application entry point.
 This backend handles:
 - Patient and referral management via Supabase
 - ElevenLabs outbound calling integration
-- Google Calendar sync
 - Webhook processing from ElevenLabs
 """
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import auth, referrals, calls, flags, calendar, webhooks, emails
+from routers import auth, referrals, calls, flags, webhooks, emails
 
 app = FastAPI(
     title="Nurse Referral Management API",
@@ -33,7 +32,6 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(referrals.router, prefix="/api/referrals", tags=["Referrals"])
 app.include_router(calls.router, prefix="/api/calls", tags=["Calls"])
 app.include_router(flags.router, prefix="/api/flags", tags=["Flags"])
-app.include_router(calendar.router, prefix="/api/calendar", tags=["Calendar"])
 app.include_router(webhooks.router, prefix="/api/webhooks", tags=["Webhooks"])
 app.include_router(emails.router, prefix="/api/emails", tags=["Emails"])
 
