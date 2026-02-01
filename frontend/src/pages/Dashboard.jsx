@@ -68,7 +68,12 @@ export default function Dashboard() {
   const callMutation = useMutation({
     mutationFn: (referral) => initiateCall(referral),
     onSuccess: () => {
-      queryClient.invalidateQueries(['referrals'])
+      queryClient.invalidateQueries({ predicate: (query) => {
+        const key = query.queryKey || [];
+        return (
+          key[0] === 'referrals' // all referrals queries
+        );
+      }});
     },
     onError: (error) => {
       console.error('Failed to initiate call:', error)

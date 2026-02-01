@@ -132,7 +132,12 @@ export default function CalendarPage() {
       return initiateCall(referral)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries(['referrals'])
+      queryClient.invalidateQueries({ predicate: (query) => {
+        const key = query.queryKey || [];
+        return (
+          key[0] === 'referrals'
+        );
+      }});
       setSelectedAppointment(null)
     },
   })

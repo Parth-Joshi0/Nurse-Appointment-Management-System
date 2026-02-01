@@ -148,16 +148,23 @@ async def process_call_outcome(call_log: dict, payload: ElevenLabsWebhookPayload
     await db.update_call_log(call_log["id"], call_update)
 
     referral_id = call_log["referral_id"]
-    
+
     # Handle based on outcome
     if payload.outcome == "rescheduled" and payload.new_appointment_time:
         # SUCCESS: Patient agreed to reschedule
+        print(f"📞 Call outcome: RESCHEDULED - Updating referral {referral_id}")
+        print(f"   Status will change from MISSED → SCHEDULED")
+        print(f"   New appointment: {payload.new_appointment_time}")
+
         await handle_successful_reschedule(
             referral_id=referral_id,
             new_datetime=payload.new_appointment_time
         )
     else:
         # FAILURE: Need nurse follow-up
+        print(f"📞 Call outcome: {payload.outcome or payload.status}")
+        print(f"   Referral {referral_id} remains MISSED - creating follow-up flag")
+
         await create_follow_up_flag(
             referral_id=referral_id,
             call_outcome=payload.outcome or payload.status,
@@ -172,11 +179,41 @@ async def handle_successful_reschedule(
     """
     Handle successful rescheduling by AI agent.
 
-    1. Update referral in Supabase
+    Full workflow:
+    1. Update referral status to SCHEDULED (not MISSED!)
+    2. Update scheduled_date
+    3. Update Google Calendar event (if exists)
+    4. Send rescheduled email notification
+    5. Log the change
     """
+    from services import get_email_service
+    from models.schemas import EmailType, EmailStatus
+
+    # Try to import Google Calendar service (may not be available)
+    try:
+        from services import get_calendar_service
+        calendar_available = True
+    except (ImportError, AttributeError):
+        calendar_available = False
+
     db = get_supabase_client()
 
-    # Update referral
+    # Get current referral state
+    existing = await db.get_referral(referral_id)
+    if not existing:
+        print(f"Referral {referral_id} not found")
+        return
+
+    # Extract old datetime for email
+    old_datetime = None
+    if existing.get("scheduled_date"):
+        try:
+            old_datetime = datetime.fromisoformat(existing["scheduled_date"].replace('Z', '+00:00'))
+        except:
+            pass
+
+    # Update referral - THIS SETS STATUS TO "SCHEDULED"
+    # (removing from MISSED status)
     referral = await db.reschedule_referral(
         referral_id,
         new_datetime,
@@ -187,7 +224,56 @@ async def handle_successful_reschedule(
         print(f"Failed to reschedule referral {referral_id}")
         return
 
-    print(f"Successfully rescheduled referral {referral_id} to {new_datetime}")
+    print(f"✅ Referral {referral_id} rescheduled: Status changed from {existing.get('status')} to SCHEDULED")
+    print(f"   New appointment: {new_datetime}")
+
+    # Update Google Calendar event if it exists and service is available
+    if calendar_available and existing.get("calendar_event_id"):
+        try:
+            calendar = get_calendar_service()
+            await calendar.update_referral_event(
+                google_event_id=existing["calendar_event_id"],
+                scheduled_at=new_datetime,
+                notes=f"Rescheduled via automated call. {referral.get('notes', '')}",
+                send_update=True
+            )
+            print(f"✅ Google Calendar event updated: {existing['calendar_event_id']}")
+        except Exception as e:
+            print(f"⚠️  Failed to update Google Calendar: {e}")
+
+    # Send rescheduled email notification
+    if referral.get("patient_email"):
+        try:
+            email_service = get_email_service()
+            email_result = await email_service.send_appointment_rescheduled_email(
+                to_email=referral["patient_email"],
+                patient_name=referral["patient_name"],
+                new_datetime=new_datetime,
+                specialist_type=referral["specialist_type"],
+                old_datetime=old_datetime,
+                location=None,
+                reason="Rescheduled via automated call",
+                attach_calendar=True
+            )
+
+            # Log the email
+            if email_result.get("success"):
+                email_log_data = {
+                    "referral_id": str(referral_id),
+                    "email_type": EmailType.APPOINTMENT_RESCHEDULED.value,
+                    "recipient_email": referral["patient_email"],
+                    "subject": f"Appointment Rescheduled - {referral['specialist_type']}",
+                    "status": EmailStatus.SENT.value,
+                    "sendgrid_message_id": email_result.get("message_id"),
+                    "calendar_invite_attached": True,
+                    "sent_at": datetime.now().isoformat()
+                }
+                await db.create_email_log(email_log_data)
+                print(f"✅ Rescheduled email sent to {referral['patient_email']}")
+        except Exception as e:
+            print(f"⚠️  Failed to send reschedule email: {e}")
+
+    print(f"✅ Successfully completed reschedule workflow for referral {referral_id}")
 
 
 async def create_follow_up_flag(
@@ -227,7 +313,7 @@ async def create_follow_up_flag(
         "title": f"Follow-up needed: {call_outcome.replace('_', ' ').title()}",
         "description": "\n".join(description_parts),
         "priority": priority_map.get(call_outcome, FlagPriority.MEDIUM.value),
-        "status": "OPEN"
+        "status": "open"  # Fixed: use lowercase to match FlagStatus enum
     }
 
     await db.create_flag(flag_data)

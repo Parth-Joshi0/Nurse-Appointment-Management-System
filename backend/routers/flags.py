@@ -10,7 +10,7 @@ Flags are created automatically when:
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status, Body
 
 from models.schemas import (
     FlagCreate,
@@ -198,8 +198,7 @@ async def update_flag(flag_id: UUID, updates: FlagUpdate):
 @router.post("/{flag_id}/resolve", response_model=FlagResponse)
 async def resolve_flag(
     flag_id: UUID,
-    resolution_notes: Optional[str] = None,
-    resolved_by: Optional[UUID] = None  # TODO: Get from auth
+    body: dict = Body(default={})
 ):
     """
     Mark a flag as resolved.
@@ -209,12 +208,27 @@ async def resolve_flag(
     - Successful manual call to patient
     - Appointment rescheduled through other means
     - Issue no longer relevant
+
+    Request body:
+    {
+        "resolution_notes": "Optional notes about resolution"
+    }
     """
     db = get_supabase_client()
 
+    # Extract data from request body
+    resolution_notes = body.get("resolution_notes")
+    resolved_by = body.get("resolved_by")
+
     # TODO: Get resolved_by from authenticated user
-    if not resolved_by:
-        resolved_by = UUID("00000000-0000-0000-0000-000000000000")  # Placeholder
+    # For now, use None if no user ID provided (will be NULL in database)
+    if resolved_by:
+        try:
+            resolved_by = UUID(resolved_by)
+        except (ValueError, TypeError):
+            resolved_by = None
+    else:
+        resolved_by = None
 
     resolved = await db.resolve_flag(flag_id, resolved_by, resolution_notes)
 
@@ -230,13 +244,20 @@ async def resolve_flag(
 
 
 @router.post("/{flag_id}/dismiss", response_model=FlagResponse)
-async def dismiss_flag(flag_id: UUID, reason: Optional[str] = None):
+async def dismiss_flag(flag_id: UUID, body: dict = Body(default={})):
     """
     Dismiss a flag without resolving it.
 
     Used when flag is no longer relevant or was created in error.
+
+    Request body:
+    {
+        "reason": "Optional reason for dismissal"
+    }
     """
     db = get_supabase_client()
+
+    reason = body.get("reason")
 
     updates = {
         "status": "dismissed",

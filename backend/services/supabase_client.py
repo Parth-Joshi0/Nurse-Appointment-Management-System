@@ -204,6 +204,10 @@ class SupabaseClient:
         """
         Reschedule a referral to a new time.
 
+        IMPORTANT: This sets status to "SCHEDULED" regardless of previous status.
+        This ensures referrals marked as "MISSED" are removed from missed lists
+        when successfully rescheduled (e.g., via AI call).
+
         Args:
             referral_id: ID of referral to reschedule
             new_datetime: New scheduled datetime
@@ -212,18 +216,27 @@ class SupabaseClient:
         Returns:
             Updated referral record
         """
+        # Get current status for logging
+        existing = await self.get_referral(referral_id)
+        old_status = existing.get("status") if existing else "UNKNOWN"
+
         updates = {
             "scheduled_date": new_datetime.isoformat(),
-            "status": "SCHEDULED",
+            "status": "SCHEDULED",  # Always set to SCHEDULED (clears MISSED status)
         }
+
         if reason:
             # Append to notes
-            existing = await self.get_referral(referral_id)
             if existing:
                 old_notes = existing.get("notes", "")
                 updates["notes"] = f"{old_notes}\n\nRescheduled: {reason}".strip()
 
-        return await self.update_referral(referral_id, updates)
+        result = await self.update_referral(referral_id, updates)
+
+        if result:
+            print(f"📅 Referral {referral_id} rescheduled: {old_status} → SCHEDULED")
+
+        return result
 
     async def mark_referral_missed(self, referral_id: UUID) -> Optional[dict]:
         """
@@ -646,7 +659,7 @@ class SupabaseClient:
     async def resolve_flag(
         self,
         flag_id: UUID,
-        resolved_by_id: UUID,
+        resolved_by_id: Optional[UUID],
         resolution_notes: Optional[str] = None
     ) -> Optional[dict]:
         """
@@ -654,7 +667,7 @@ class SupabaseClient:
 
         Args:
             flag_id: UUID of the flag
-            resolved_by_id: UUID of user resolving the flag
+            resolved_by_id: UUID of user resolving the flag (None if no auth)
             resolution_notes: Optional notes about the resolution
 
         Returns:
@@ -662,7 +675,7 @@ class SupabaseClient:
         """
         updates = {
             "status": "resolved",
-            "resolved_by_id": str(resolved_by_id),
+            "resolved_by_id": str(resolved_by_id) if resolved_by_id else None,
             "resolved_at": datetime.now(timezone.utc).isoformat(),
             "resolution_notes": resolution_notes
         }
