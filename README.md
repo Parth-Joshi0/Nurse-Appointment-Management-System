@@ -11,8 +11,9 @@ This system provides a tablet-based web app for nurses to:
 - Sync appointments with Google Calendar
 
 ## Demo & Devpost Link
-  [Devpost Link]([url](https://devpost.com/software/closedloop-ai?_gl=1*1puuekf*_gcl_au*MTI5ODY0NjE2OC4xNzYzNzc2Mjcx*_ga*MjA2OTU2OTU3OS4xNzYzNzc2Mjcy*_ga_0YHJK3Y10M*czE3NzAxNzA1NzMkbzIxJGcxJHQxNzcwMTcwNTgzJGo1MCRsMCRoMA..))
-  [Youtube Demo]([url](https://www.youtube.com/watch?v=DkfdOxq3l8o))
+  [Devpost Link](https://devpost.com/software/closedloop-ai?_gl=1*1puuekf*_gcl_au*MTI5ODY0NjE2OC4xNzYzNzc2Mjcx*_ga*MjA2OTU2OTU3OS4xNzYzNzc2Mjcy*_ga_0YHJK3Y10M*czE3NzAxNzA1NzMkbzIxJGcxJHQxNzcwMTcwNTgzJGo1MCRsMCRoMA..)
+  
+  [Youtube Demo](https://www.youtube.com/watch?v=DkfdOxq3l8o)
 
 ## Architecture
 
