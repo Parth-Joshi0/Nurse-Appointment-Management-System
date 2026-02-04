@@ -1,11 +1,10 @@
-# Nurse Appointment Management System
+# Nurse AI Appointment Follow-up
 
-A hackathon project for managing patient appointments with automated outbound calling for rescheduling missed appointments.
+A hackathon project for managing patient appointments with automated AI-powered outbound calling for rescheduling missed appointments.
 
 ## 🎯 Overview
 
 This system provides a tablet-based web app for nurses to:
-
 - View and manage patient appointments via calendar
 - Automatically call patients who miss appointments (via ElevenLabs AI)
 - Receive follow-up flags when automated rescheduling fails
@@ -39,9 +38,19 @@ This system provides a tablet-based web app for nurses to:
 - Node.js 18+
 - Supabase account
 - ElevenLabs account (with Conversational AI access)
+- Twilio account with phone number
 - Google Cloud project (for Calendar API)
+- Cloudflare Tunnel (for webhook exposure)
 
-### Backend Setup
+### 1. Clone and Setup
+
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd nurse-ai-followup
+```
+
+### 2. Backend Setup
 
 ```bash
 cd backend
@@ -55,36 +64,65 @@ pip install -r requirements.txt
 
 # Copy environment variables
 cp ../.env.example .env
-# Edit .env with your credentials
+# Edit .env with your credentials (see Environment Variables section)
 
 # Run the server
 uvicorn main:app --reload
 ```
 
-### Frontend Setup
+The backend will start on `http://localhost:8000`
+
+### 3. Frontend Setup
 
 ```bash
 cd frontend
 
-# Install dependencies
+# Install dependencies (first time only)
 npm install
 
-# Start dev server
+# Start the development server
 npm run dev
+
+# Go to http://localhost:3000/ in browser
 ```
 
-### Database Setup
+### 4. Database Setup
 
 1. Create a new Supabase project at [supabase.com](https://supabase.com)
 2. Go to SQL Editor in your project dashboard
 3. Copy and run the contents of `database/schema.sql`
 4. Copy your API keys to `.env`
 
+### 5. Agent Calls Setup (ElevenLabs + Twilio)
+
+The agent calls service bridges Twilio phone calls to ElevenLabs AI agents.
+
+```bash
+cd agent-calls
+
+# Install dependencies
+pip install fastapi uvicorn twilio websockets pydantic
+
+# Configure your credentials in the script (see Agent Calls Configuration section)
+
+# Set up Cloudflare Tunnel (in a separate terminal)
+cloudflared tunnel --url http://localhost:8000
+
+# Copy the https URL from the output and set it as environment variable
+export WEBHOOK_BASE_URL="https://your-tunnel-url.trycloudflare.com"
+
+# Run the agent calls server
+python agent_calls.py
+```
+
 ## 📁 Project Structure
 
 ```
 /
-├── backend/                 # FastAPI backend
+├── backend/                # FastAPI backend
+├── agent-calls/            # ElevenLabs + Twilio voice bridge
+│   ├── SampleAdd.py        # Test Adding to Database
+│   └── agent_calls.py      # WebSocket bridge for AI calls
 │   ├── main.py             # Application entry point
 │   ├── requirements.txt    # Python dependencies
 │   ├── models/
@@ -115,6 +153,7 @@ npm run dev
 │   │       └── Login.jsx
 │   └── package.json
 │
+│
 ├── database/
 │   └── schema.sql         # Supabase database schema
 │
@@ -138,16 +177,16 @@ npm run dev
 3. Nurse can trigger call OR automated job triggers
           │
           ▼
-4. Backend calls ElevenLabs API to initiate outbound call
+4. Backend calls agent-calls service to initiate outbound call
           │
           ▼
-5. ElevenLabs AI agent calls patient
+5. ElevenLabs AI agent calls patient via Twilio
    - Explains missed appointment
    - Offers rescheduling options
    - Collects new preferred time
           │
           ▼
-6. Call ends → ElevenLabs sends webhook to /api/webhooks/elevenlabs
+6. Call ends → Agent stores context and notifies backend
           │
           ├─── SUCCESS (Rescheduled) ───┐
           │                             ▼
@@ -161,43 +200,64 @@ npm run dev
                                       Nurse sees on dashboard
 ```
 
-### Webhook Processing
+### Making Calls from Backend
 
 ```python
-# When ElevenLabs calls our webhook:
-POST /api/webhooks/elevenlabs
-{
-    "call_id": "elabs-123",
-    "status": "completed",
-    "outcome": "rescheduled",
-    "new_appointment_time": "2026-02-05T14:00:00Z",
-    "metadata": {
-        "appointment_id": "apt-uuid",
-        "call_attempt_id": "call-uuid"
-    }
-}
+import requests
 
-# Backend then:
-# 1. Validates webhook signature
-# 2. Finds call attempt record
-# 3. If rescheduled: update appointment + sync calendar
-# 4. If failed: create nurse follow-up flag
+# Call the agent-calls service
+response = requests.post("https://your-tunnel-url.trycloudflare.com/make-call", json={
+    "phone_number": "+19054628586",
+    "dynamic_variables": {
+        "patient_name": "John Doe",
+        "patient_age": "45",
+        "specialist_type": "Cardiologist",
+        "cancelled_appointment_time": "Jan 20, 2026",
+        "selected_time": ""
+    }
+})
+
+print(response.json())
+# Output: {"success": true, "call_sid": "CAxxxx..."}
 ```
 
 ## 🔑 Environment Variables
 
 See `.env.example` for all required variables:
 
-| Variable                    | Description                             |
+### Backend & Database
+| Variable | Description |
 | --------------------------- | --------------------------------------- |
-| `SUPABASE_URL`              | Your Supabase project URL               |
+| `SUPABASE_URL` | Your Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side) |
-| `ELEVENLABS_API_KEY`        | ElevenLabs API key                      |
-| `ELEVENLABS_AGENT_ID`       | Your conversational agent ID            |
-| `GOOGLE_CLIENT_ID`          | Google OAuth client ID                  |
-| `GOOGLE_CLIENT_SECRET`      | Google OAuth client secret              |
-| `BACKEND_BASE_URL`          | Public URL for webhooks                 |
-| `WEBHOOK_SECRET`            | Secret for verifying webhooks           |
+| `BACKEND_BASE_URL` | Public URL for webhooks |
+| `WEBHOOK_SECRET` | Secret for verifying webhooks |
+
+### Google Calendar
+| Variable | Description |
+| --------------------------- | --------------------------------------- |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+
+### ElevenLabs
+| Variable | Description |
+| --------------------------- | --------------------------------------- |
+| `ELEVENLABS_API_KEY` | ElevenLabs API key |
+| `ELEVENLABS_AGENT_ID` | Your conversational agent ID |
+
+### Twilio (for Agent Calls)
+Configure these directly in the `agent-calls/agent_calls.py` file:
+
+```python
+TWILIO_ACCOUNT_SID = "your_twilio_account_sid"
+TWILIO_AUTH_TOKEN = "your_twilio_auth_token"
+TWILIO_PHONE_NUMBER = "+1234567890"  # Your Twilio number
+```
+
+### Cloudflare Tunnel
+```bash
+export WEBHOOK_BASE_URL="https://your-tunnel-url.trycloudflare.com"
+```
 
 ## 🛠️ Development
 
@@ -215,17 +275,30 @@ npm test
 
 ### Local Webhook Testing
 
-Use [ngrok](https://ngrok.com) to expose your local server:
+#### Setting up Cloudflare Tunnel
 
 ```bash
-ngrok http 8000
-# Update BACKEND_BASE_URL in .env with ngrok URL
+# Install cloudflared (if not already installed)
+# On macOS:
+brew install cloudflare/cloudflare/cloudflared
+
+# On Linux:
+wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared-linux-amd64.deb
+
+# Start the tunnel (in a separate terminal)
+cloudflared tunnel --url http://localhost:8000
+
+# Copy the https URL from the output (e.g., https://abc-def-123.trycloudflare.com)
+# Then export it:
+export WEBHOOK_BASE_URL="https://abc-def-123.trycloudflare.com"
 ```
 
 ## 📝 API Endpoints
 
-### Appointments
+### Main Backend Endpoints
 
+#### Appointments
 - `GET /api/appointments/` - List appointments
 - `POST /api/appointments/` - Create appointment
 - `GET /api/appointments/{id}` - Get appointment
@@ -233,24 +306,89 @@ ngrok http 8000
 - `POST /api/appointments/{id}/reschedule` - Reschedule
 - `POST /api/appointments/{id}/mark-missed` - Mark as missed
 
-### Calls
-
+#### Calls
 - `POST /api/calls/initiate` - Initiate outbound call
 - `GET /api/calls/{id}` - Get call status
 
-### Flags
-
+#### Flags
 - `GET /api/flags/open` - Get open flags
 - `POST /api/flags/{id}/resolve` - Resolve flag
 - `POST /api/flags/{id}/dismiss` - Dismiss flag
 
-### Calendar
-
+#### Calendar
 - `POST /api/calendar/sync/{appointment_id}` - Sync to Google Calendar
 
-### Webhooks
-
+#### Webhooks
 - `POST /api/webhooks/elevenlabs` - ElevenLabs callback
+
+### Agent Calls Service Endpoints
+
+#### Health Check
+- `GET /` - Health check endpoint
+
+**Response:**
+```json
+{
+  "status": "ready",
+  "agent": "your_agent_id"
+}
+```
+
+#### Make Call
+- `POST /make-call` - Initiate an outbound call
+
+**Request Body:**
+```json
+{
+  "phone_number": "+1234567890",
+  "dynamic_variables": {
+    "patient_name": "John Doe",
+    "patient_age": "45",
+    "specialist_type": "Cardiologist",
+    "cancelled_appointment_time": "Jan 20, 2026",
+    "selected_time": ""
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "call_sid": "CAxxxx..."
+}
+```
+
+#### Incoming Call
+- `POST /incoming-call` - Webhook for handling incoming Twilio calls
+
+#### Media Stream
+- `WebSocket /media-stream` - WebSocket endpoint for real-time audio streaming
+
+## 🔧 How the Agent Calls Work
+
+1. **Call Initiation**: Backend POSTs to `/make-call` on agent-calls service
+2. **Twilio Connection**: Twilio connects to webhook and establishes a media stream
+3. **ElevenLabs Bridge**: Server opens WebSocket to ElevenLabs agent
+4. **Bidirectional Audio**: Audio flows in real-time between caller and AI agent
+5. **Context Tracking**: Conversation data (like selected appointment times) is stored
+6. **Auto Hangup**: Call ends automatically after agent completes conversation
+
+### Call Context Storage
+
+The system stores call context in memory using the call SID:
+
+```python
+# Access stored context
+call_context = CALL_CONTEXT.get(call_sid)
+selected_time = call_context.get("selected_time")
+```
+
+This is useful for:
+- Extracting selected appointment times from patient conversations
+- Storing patient preferences
+- Tracking rebooking outcomes
+- Managing cancelled appointment follow-ups
 
 ## 🚧 TODOs
 
@@ -261,7 +399,47 @@ ngrok http 8000
 - [ ] Implement proper ElevenLabs webhook signature verification
 - [ ] Add comprehensive test coverage
 - [ ] Set up CI/CD pipeline
+- [ ] Replace in-memory CALL_CONTEXT with Redis or database
+- [ ] Add authentication to agent-calls API endpoints
+- [ ] Use environment variables for all secrets in agent-calls
+- [ ] Set up HTTPS with valid SSL certificate for production
+
+## 🐛 Troubleshooting
+
+### Connection Issues
+- Verify your webhook URL is publicly accessible
+- Check that Cloudflare Tunnel is running (`cloudflared tunnel --url http://localhost:8000`)
+- Ensure firewall allows WebSocket connections
+- Confirm the `WEBHOOK_BASE_URL` environment variable is set correctly
+
+### Audio Issues
+- Confirm ElevenLabs agent is active and configured
+- Check Twilio phone number has voice capabilities
+- Verify API keys are correct
+
+### Call Not Connecting
+- Check Twilio account has sufficient credits
+- Verify phone number format includes country code (+1...)
+- Review Twilio debugger logs in console
+
+### Frontend Not Loading
+- Ensure backend is running on `http://localhost:8000`
+- Check that all environment variables are set correctly
+- Clear browser cache and try again
 
 ## 📄 License
 
 MIT License - Built for SparksHacks Hackathon 2026
+
+---
+
+## 🎉 Credits
+
+Built with:
+- FastAPI (Python backend)
+- React (Frontend)
+- Supabase (Database)
+- ElevenLabs (Conversational AI)
+- Twilio (Phone calls)
+- Google Calendar API (Calendar sync)
+- Cloudflare Tunnel (Webhook exposure)
