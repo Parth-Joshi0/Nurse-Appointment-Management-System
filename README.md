@@ -2,7 +2,7 @@
 
 A hackathon project for managing patient appointments with automated AI-powered outbound calling for rescheduling missed appointments.
 
-## 🎯 Overview
+## Overview
 
 This system provides a tablet-based web app for nurses to:
 - View and manage patient appointments via calendar
@@ -10,7 +10,11 @@ This system provides a tablet-based web app for nurses to:
 - Receive follow-up flags when automated rescheduling fails
 - Sync appointments with Google Calendar
 
-## 🏗️ Architecture
+## Demo & Devpost Link
+  [Devpost Link]([url](https://devpost.com/software/closedloop-ai?_gl=1*1puuekf*_gcl_au*MTI5ODY0NjE2OC4xNzYzNzc2Mjcx*_ga*MjA2OTU2OTU3OS4xNzYzNzc2Mjcy*_ga_0YHJK3Y10M*czE3NzAxNzA1NzMkbzIxJGcxJHQxNzcwMTcwNTgzJGo1MCRsMCRoMA..))
+  [Youtube Demo]([url](https://www.youtube.com/watch?v=DkfdOxq3l8o))
+
+## Architecture
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
@@ -30,7 +34,7 @@ This system provides a tablet-based web app for nurses to:
            └────────────┘ └────────────┘ └────────────┘
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -115,7 +119,7 @@ export WEBHOOK_BASE_URL="https://your-tunnel-url.trycloudflare.com"
 python agent_calls.py
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 /
@@ -163,7 +167,7 @@ python agent_calls.py
 └── .env.example           # Environment variables template
 ```
 
-## 🔄 Workflow
+## Workflow
 
 ### Missed Appointment → Automated Call Flow
 
@@ -221,7 +225,7 @@ print(response.json())
 # Output: {"success": true, "call_sid": "CAxxxx..."}
 ```
 
-## 🔑 Environment Variables
+## Environment Variables
 
 See `.env.example` for all required variables:
 
@@ -259,7 +263,7 @@ TWILIO_PHONE_NUMBER = "+1234567890"  # Your Twilio number
 export WEBHOOK_BASE_URL="https://your-tunnel-url.trycloudflare.com"
 ```
 
-## 🛠️ Development
+## Development
 
 ### Running Tests
 
@@ -294,7 +298,7 @@ cloudflared tunnel --url http://localhost:8000
 export WEBHOOK_BASE_URL="https://abc-def-123.trycloudflare.com"
 ```
 
-## 📝 API Endpoints
+## API Endpoints
 
 ### Main Backend Endpoints
 
@@ -365,7 +369,7 @@ export WEBHOOK_BASE_URL="https://abc-def-123.trycloudflare.com"
 #### Media Stream
 - `WebSocket /media-stream` - WebSocket endpoint for real-time audio streaming
 
-## 🔧 How the Agent Calls Work
+## How the Agent Calls Work
 
 1. **Call Initiation**: Backend POSTs to `/make-call` on agent-calls service
 2. **Twilio Connection**: Twilio connects to webhook and establishes a media stream
@@ -390,7 +394,7 @@ This is useful for:
 - Tracking rebooking outcomes
 - Managing cancelled appointment follow-ups
 
-## 🚧 TODOs
+## TODOs
 
 - [ ] Implement actual authentication (currently stubbed)
 - [ ] Add background job for auto-detecting missed appointments
@@ -404,7 +408,7 @@ This is useful for:
 - [ ] Use environment variables for all secrets in agent-calls
 - [ ] Set up HTTPS with valid SSL certificate for production
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Connection Issues
 - Verify your webhook URL is publicly accessible
@@ -427,13 +431,13 @@ This is useful for:
 - Check that all environment variables are set correctly
 - Clear browser cache and try again
 
-## 📄 License
+## License
 
 MIT License - Built for SparksHacks Hackathon 2026
 
 ---
 
-## 🎉 Credits
+## Credits
 
 Built with:
 - FastAPI (Python backend)
